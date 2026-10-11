@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cắt ảnh · Bo góc · Đổ bóng</title>
+  <style>
+    :root { --ink:#20242a; --muted:#69707d; --line:#d9dce2; --yellow:#ffd000; --panel:#fff; --bg:#f3f4f6; }
+    * { box-sizing:border-box } body { margin:0; min-width:320px; background:var(--bg); color:var(--ink); font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header { padding:24px clamp(18px,4vw,54px) 18px; background:#fff; border-bottom:1px solid var(--line) }
+    h1 { font-size:24px; margin:0 0 6px; letter-spacing:-.03em } header p { margin:0; color:var(--muted); font-size:14px }
+    .app { max-width:1440px; margin:auto; padding:26px clamp(18px,4vw,54px) 42px; display:grid; grid-template-columns:minmax(420px,1fr) 260px 250px; gap:16px; align-items:start }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:0 1px 2px #18202b08 }
+    .editor { padding:12px }.stage { height:min(62vh,590px); min-height:390px; position:relative; overflow:hidden; border-radius:11px; background:#e4e6eb; touch-action:none; user-select:none }
+    .empty { inset:0; position:absolute; display:grid; place-content:center; text-align:center; color:var(--muted); gap:12px; padding:20px; cursor:pointer }.empty b { color:var(--ink); font-size:17px }.empty:hover { background:#dfe2e8 }.empty:focus-visible { outline:3px solid var(--yellow); outline-offset:-5px }
+    .drop-icon { margin:auto; width:54px; height:54px; display:grid; place-items:center; border-radius:14px; background:#fff; border:1px solid var(--line); font-size:28px }
+    #source { position:absolute; max-width:none; transform-origin:0 0; pointer-events:none; display:none }.shade { position:absolute; inset:0; pointer-events:none; display:none }.shade > i { position:absolute; background:#10121692 }
+    #crop { display:none; position:absolute; border:2px solid var(--yellow); cursor:move; box-shadow:0 0 0 1px #805f00; touch-action:none }.handle { width:14px; height:14px; border-radius:50%; background:var(--yellow); position:absolute; border:1px solid #7c6000; z-index:2 }.nw{left:-8px;top:-8px;cursor:nwse-resize}.ne{right:-8px;top:-8px;cursor:nesw-resize}.sw{left:-8px;bottom:-8px;cursor:nesw-resize}.se{right:-8px;bottom:-8px;cursor:nwse-resize}
+    .hint { margin:11px 2px 0; color:var(--muted); font-size:13px }.controls { padding:16px }.controls h2 { margin:0 0 11px; font-size:15px }.ratios { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px }.ratio { padding:9px 12px; min-width:55px; border-radius:22px; border:1px solid var(--line); background:#fff; font:600 15px inherit; cursor:pointer }.ratio.active { background:var(--yellow); border-color:var(--yellow) }
+    label { display:flex; justify-content:space-between; margin:18px 0 9px; font-size:14px; font-weight:700 } label output { color:var(--muted); font-weight:500 } input[type=range] { width:100%; accent-color:#f4c900; cursor:pointer } select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); font:inherit }
+    .result { padding:12px }.checker { width:100%; aspect-ratio:1/1; height:auto; min-height:0; display:grid; place-items:center; overflow:hidden; border-radius:10px; background-color:#fff; background-image:linear-gradient(45deg,#e3e5ea 25%,transparent 25%),linear-gradient(-45deg,#e3e5ea 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e5ea 75%),linear-gradient(-45deg,transparent 75%,#e3e5ea 75%); background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0 }.checker canvas { display:block; width:100%; height:100%; min-width:0; min-height:0; object-fit:contain }.result p { color:var(--muted); font-size:13px; line-height:1.45; margin:12px 1px }
+    button.main, button.secondary, .upload { width:100%; border-radius:24px; padding:11px 14px; font:700 15px inherit; cursor:pointer; text-align:center; display:block }.main { border:0; background:var(--yellow); color:#1c1a00; margin:10px 0 }.secondary, .upload { background:#fff; color:var(--ink); border:1px solid var(--line); margin-top:9px }.upload { border-style:dashed; margin:0 0 12px }.upload input{display:none}.status { margin:12px 1px 0; font-size:13px; font-weight:700; color:#4e5967; min-height:19px }
+    @media (max-width:950px) { .app { grid-template-columns:1fr 250px }.result { grid-column:1/-1; display:grid; grid-template-columns:200px 1fr; gap:16px; align-items:center }.checker{width:200px}.result > div{align-self:center} }
+    @media (max-width:650px) { header{padding-top:18px}.app{display:flex;flex-direction:column;padding:16px}.editor,.controls,.result{width:100%}.stage{min-height:360px;height:56vh}.result{display:block}.checker{width:100%;max-width:280px;margin:auto} }
+  </style>
+</head>
+<body>
+  <header><h1>Cắt ảnh, bo góc &amp; đổ bóng</h1><p>Tạo PNG nền trong suốt để đặt lên video, slide hoặc thiết kế.</p></header>
+  <main class="app">
+    <section class="card editor"><div class="stage" id="stage">
+      <div class="empty" id="empty" role="button" tabindex="0" aria-label="Chọn ảnh"><div class="drop-icon">▧</div><b>Thả ảnh vào đây</b><span>hoặc bấm để chọn ảnh từ máy</span></div>
+      <img id="source" alt="Ảnh gốc"><div class="shade" id="shade"><i></i><i></i><i></i><i></i></div>
+      <div id="crop"><span class="handle nw" data-h="nw"></span><span class="handle ne" data-h="ne"></span><span class="handle sw" data-h="sw"></span><span class="handle se" data-h="se"></span></div>
+    </div><p class="hint">Kéo trong khung để di chuyển, kéo các chấm vàng để đổi kích thước.</p></section>
+    <aside class="card controls">
+      <h2>Tỉ lệ khung</h2><div class="ratios"><button class="ratio active" data-r="free">Tự do</button><button class="ratio" data-r="1">1:1</button><button class="ratio" data-r=".8">4:5</button><button class="ratio" data-r=".5625">9:16</button></div>
+      <label for="round">Bo góc <output id="roundOut">5%</output></label><input id="round" type="range" min="0" max="50" value="5">
+      <label for="shadow">Đổ bóng <output id="shadowOut">30</output></label><input id="shadow" type="range" min="0" max="80" value="30">
+      <label for="size">Chiều rộng ảnh xuất</label><select id="size"><option value="crop">Theo vùng cắt</option><option value="1080">1080 px</option><option value="1920">1920 px</option><option value="custom">Nhập tùy chọn…</option></select>
+    </aside>
+    <aside class="card result"><div class="checker"><canvas id="preview" width="300" height="300"></canvas></div><div><p id="meta">Chọn một ảnh để bắt đầu.</p><button class="main" id="save" disabled>Lưu PNG</button><button class="secondary" id="copy" disabled>Sao chép ảnh</button><label class="upload">Chọn ảnh khác<input id="picker" type="file" accept="image/*"></label><div class="status" id="status"></div></div></aside>
+  </main>
+<script>
+(() => {
+  const $=s=>document.querySelector(s), stage=$('#stage'), img=$('#source'), crop=$('#crop'), shade=$('#shade'), checker=$('.checker'), preview=$('#preview'), pctx=preview.getContext('2d');
+  const state={img:null, scale:1, crop:{x:80,y:60,w:260,h:260}, ratio:null, action:null};
+  function fitImage(){ const r=stage.getBoundingClientRect(), iw=state.img.naturalWidth, ih=state.img.naturalHeight; state.scale=Math.min(r.width*.94/iw,r.height*.90/ih); img.style.width=iw*state.scale+'px'; img.style.height=ih*state.scale+'px'; img.style.left=(r.width-iw*state.scale)/2+'px'; img.style.top=(r.height-ih*state.scale)/2+'px'; const w=Math.min(r.width*.68,iw*state.scale*.9), h=Math.min(r.height*.72,ih*state.scale*.9); state.crop={x:(r.width-w)/2,y:(r.height-h)/2,w,h}; update(); }
+  function clampCrop(){const c=state.crop; if(!state.img)return; const ix=parseFloat(img.style.left)||0, iy=parseFloat(img.style.top)||0, iw=parseFloat(img.style.width)||0, ih=parseFloat(img.style.height)||0; c.w=Math.max(35,Math.min(c.w,iw));c.h=Math.max(35,Math.min(c.h,ih));c.x=Math.max(ix,Math.min(c.x,ix+iw-c.w));c.y=Math.max(iy,Math.min(c.y,iy+ih-c.h));}
+  function applyRatio(anchor){ if(!state.ratio)return; const c=state.crop, ratio=state.ratio; if(anchor==='side'){c.h=c.w/ratio}else{c.w=c.h*ratio} clampCrop(); }
+  function update(){if(!state.img)return; clampCrop(); const c=state.crop; Object.assign(crop.style,{left:c.x+'px',top:c.y+'px',width:c.w+'px',height:c.h+'px'}); shade.style.display='block'; const ps=shade.children; Object.assign(ps[0].style,{left:0,top:0,width:'100%',height:c.y+'px'}); Object.assign(ps[1].style,{left:0,top:(c.y+c.h)+'px',width:'100%',bottom:0}); Object.assign(ps[2].style,{left:0,top:c.y+'px',width:c.x+'px',height:c.h+'px'}); Object.assign(ps[3].style,{left:(c.x+c.w)+'px',top:c.y+'px',right:0,height:c.h+'px'}); render(); }
+  function outputSize(){let v=$('#size').value;if(v==='custom'){const n=Number(prompt('Nhập chiều rộng ảnh (px):','1080')); if(n>0){$('#size').value='custom';return n} return Math.round(state.crop.w/state.scale)} return v==='crop'?Math.round(state.crop.w/state.scale):Number(v)}
+  function metrics(contentW){const sh=Number($('#shadow').value), pad=Math.ceil(sh*1.45), contentH=Math.round(contentW*state.crop.h/state.crop.w);return{pad,contentW,contentH,outW:contentW+pad*2,outH:contentH+pad*2}}
+  function paint(ctx,contentW){const c=state.crop, ix=parseFloat(img.style.left),iy=parseFloat(img.style.top), s=state.scale, m=metrics(contentW), round=Number($('#round').value)/100*Math.min(m.contentW,m.contentH), sh=Number($('#shadow').value);ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);ctx.save();ctx.translate(m.pad,m.pad);ctx.shadowColor='rgba(0,0,0,.32)';ctx.shadowBlur=sh;ctx.shadowOffsetY=Math.round(sh*.28);ctx.beginPath();ctx.roundRect(0,0,m.contentW,m.contentH,round);ctx.fillStyle='#fff';ctx.fill();ctx.restore();ctx.save();ctx.translate(m.pad,m.pad);ctx.beginPath();ctx.roundRect(0,0,m.contentW,m.contentH,round);ctx.clip();ctx.drawImage(state.img,(c.x-ix)/s,(c.y-iy)/s,c.w/s,c.h/s,0,0,m.contentW,m.contentH);ctx.restore();return m;}
+  function render(){const contentW=Math.min(650,Math.max(160,Math.round(state.crop.w*1.4))),m=metrics(contentW);preview.width=m.outW;preview.height=m.outH;checker.style.aspectRatio=`${m.outW} / ${m.outH}`;paint(pctx,contentW);const ow=Math.round(state.crop.w/state.scale),oh=Math.round(state.crop.h/state.scale);$('#meta').textContent=`Ảnh xuất: ${ow} × ${oh} px, nền trong suốt`;}
+  function pointer(e){const r=stage.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+  crop.addEventListener('pointerdown',e=>{e.preventDefault();const h=e.target.dataset.h;state.action={type:h?'resize':'move',h,start:pointer(e),crop:{...state.crop}};stage.setPointerCapture(e.pointerId)});
+  stage.addEventListener('pointermove',e=>{if(!state.action)return;const p=pointer(e),a=state.action,dx=p.x-a.start.x,dy=p.y-a.start.y,c=state.crop,old=a.crop;if(a.type==='move'){c.x=old.x+dx;c.y=old.y+dy}else{const left=a.h.includes('w'), top=a.h.includes('n');c.x=left?old.x+dx:old.x;c.y=top?old.y+dy:c.y;c.w=left?old.w-dx:old.w+dx;c.h=top?old.h-dy:old.h+dy;if(state.ratio){if(left)c.x=old.x+old.w-c.w;c.h=c.w/state.ratio;if(top)c.y=old.y+old.h-c.h}}update()});
+  stage.addEventListener('pointerup',()=>state.action=null); stage.addEventListener('dragover',e=>e.preventDefault());stage.addEventListener('drop',e=>{e.preventDefault();load(e.dataTransfer.files[0])});
+  function load(file){if(!file||!file.type.startsWith('image/'))return;const url=URL.createObjectURL(file),im=new Image();im.onload=()=>{state.img=im;img.src=url;img.style.display='block';crop.style.display='block';$('#empty').style.display='none';$('#save').disabled=$('#copy').disabled=false;fitImage()};im.src=url}
+  $('#picker').addEventListener('change',e=>load(e.target.files[0])); $('#empty').addEventListener('click',()=>$('#picker').click()); $('#empty').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ') {e.preventDefault();$('#picker').click()}}); $('.upload').addEventListener('dragover',e=>e.preventDefault());
+  document.querySelectorAll('.ratio').forEach(b=>b.onclick=()=>{document.querySelectorAll('.ratio').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.ratio=b.dataset.r==='free'?null:Number(b.dataset.r);if(state.ratio)applyRatio('side');update()});
+  $('#round').oninput=e=>{$('#roundOut').value=e.target.value+'%';render()};$('#shadow').oninput=e=>{$('#shadowOut').value=e.target.value;render()};$('#size').onchange=()=>{if(state.img)render()}; window.addEventListener('resize',()=>state.img&&fitImage());
+  function fullCanvas(){const contentW=outputSize(), m=metrics(contentW), cn=document.createElement('canvas');cn.width=m.outW;cn.height=m.outH;paint(cn.getContext('2d'),contentW);return cn}
+  $('#save').onclick=()=>{const a=document.createElement('a');a.href=fullCanvas().toDataURL('image/png');a.download='anh-da-cat.png';a.click();$('#status').textContent='Đã tải PNG xuống.'};
+  $('#copy').onclick=async()=>{try{const cn=fullCanvas();const blob=await new Promise(r=>cn.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);$('#status').textContent='Đã sao chép ảnh.'}catch{$('#status').textContent='Trình duyệt chưa cho phép sao chép ảnh.'}};
+})();
+</script>
+</body></html>
